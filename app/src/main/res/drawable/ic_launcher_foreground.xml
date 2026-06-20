@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- stopwatch body -->
+    <path
+        android:fillColor="#FF5722"
+        android:pathData="M54,32 m-26,0 a26,26 0 1,0 52,0 a26,26 0 1,0 -52,0" />
+    <path
+        android:fillColor="#0E1116"
+        android:pathData="M54,32 m-19,0 a19,19 0 1,0 38,0 a19,19 0 1,0 -38,0" />
+    <!-- top button -->
+    <path
+        android:fillColor="#FF5722"
+        android:pathData="M49,3 h10 v6 h-10 z" />
+    <path
+        android:fillColor="#FF5722"
+        android:pathData="M51,8 h6 v4 h-6 z" />
+    <!-- hand pointing to ~3 o'clock-ish -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M53,32 l18,-4 l-18,8 z" />
+    <!-- center dot -->
+    <path
+        android:fillColor="#FFC107"
+        android:pathData="M54,32 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+</vector>

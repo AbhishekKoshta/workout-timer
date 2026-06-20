@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#0E1116" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Workout Timer</title>
+<style>
+  :root{
+    --bg:#0E1116; --surface:#1A1F29; --text:#fff; --dim:#9AA4B2;
+    --work:#FF5722; --rest:#2E9DF7; --ready:#FFC107; --done:#4CAF50;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex;flex-direction:column;align-items:center;padding:18px 16px 40px;min-height:100vh}
+  h1{font-size:20px;margin:4px 0 2px}
+  #phase{font-size:26px;font-weight:800;letter-spacing:.15em;color:var(--ready);margin-top:8px}
+  .dial{width:260px;height:260px;border-radius:50%;background:var(--surface);
+    display:flex;align-items:center;justify-content:center;margin:14px 0 6px}
+  #time{font-size:74px;font-weight:800;font-variant-numeric:tabular-nums;font-family:monospace}
+  #round{font-size:18px;margin-top:6px}
+  #total{font-size:14px;color:var(--dim);margin-top:2px}
+  .controls{display:flex;gap:12px;width:100%;max-width:360px;margin-top:16px}
+  button{flex:1;height:56px;border:0;border-radius:14px;font-size:17px;font-weight:700;color:#fff}
+  #startPause{background:var(--work)}
+  #reset{background:transparent;border:2px solid var(--dim);color:var(--text)}
+  .card{width:100%;max-width:360px;background:var(--surface);border-radius:18px;padding:16px;margin-top:20px}
+  .card h2{font-size:13px;color:var(--dim);letter-spacing:.08em;margin:0 0 10px}
+  .row{display:flex;align-items:center;padding:6px 0}
+  .row label{flex:1;font-size:16px}
+  .row .val{width:60px;text-align:center;font-size:17px;font-weight:700}
+  .step{width:46px;height:42px;border-radius:12px;background:#2a313d;font-size:22px;flex:none}
+  .chk{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:15px}
+  .chk input{width:20px;height:20px}
+  .hint{color:var(--dim);font-size:12px;margin-top:14px;text-align:center;max-width:360px}
+</style>
+</head>
+<body>
+  <h1>Workout Timer</h1>
+  <div id="phase">READY</div>
+  <div class="dial"><div id="time">00:30</div></div>
+  <div id="round">Round 0 / 0</div>
+  <div id="total">Total left 20:00</div>
+
+  <div class="controls">
+    <button id="startPause">START</button>
+    <button id="reset">RESET</button>
+  </div>
+
+  <div class="card">
+    <h2>SETTINGS</h2>
+    <div class="row" data-k="total"><label>Total workout (min)</label>
+      <button class="step" data-d="-1">−</button><div class="val"></div><button class="step" data-d="1">+</button></div>
+    <div class="row" data-k="work"><label>Work (sec)</label>
+      <button class="step" data-d="-1">−</button><div class="val"></div><button class="step" data-d="1">+</button></div>
+    <div class="row" data-k="rest"><label>Rest (sec)</label>
+      <button class="step" data-d="-1">−</button><div class="val"></div><button class="step" data-d="1">+</button></div>
+    <div class="row" data-k="beep"><label>Beep countdown (sec)</label>
+      <button class="step" data-d="-1">−</button><div class="val"></div><button class="step" data-d="1">+</button></div>
+    <div class="row" data-k="prep"><label>Get ready (sec)</label>
+      <button class="step" data-d="-1">−</button><div class="val"></div><button class="step" data-d="1">+</button></div>
+    <label class="chk"><input type="checkbox" id="vib" checked> Vibrate on phase change</label>
+  </div>
+  <div class="hint">Tap START once to unlock sound on iOS/Android. Add to Home Screen for a full-screen app.</div>
+
+<script>
+const COLORS={GET_READY:'--ready',WORK:'--work',REST:'--rest',DONE:'--done'};
+const cfg={
+  total:{v:20,min:1,max:180,step:1},
+  work:{v:30,min:5,max:600,step:5},
+  rest:{v:10,min:0,max:300,step:5},
+  beep:{v:5,min:0,max:10,step:1},
+  prep:{v:10,min:0,max:30,step:5},
+};
+function cssv(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+function fmt(s){s=Math.max(0,Math.ceil(s));return String((s/60)|0).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
+
+// ----- WebAudio beeps -----
+let ac=null;
+function audio(){ if(!ac){ const C=window.AudioContext||window.webkitAudioContext; ac=new C(); } if(ac.state==='suspended') ac.resume(); return ac; }
+function beep(freq,dur,type='sine',vol=0.5){
+  const a=audio(); const o=a.createOscillator(); const g=a.createGain();
+  o.type=type; o.frequency.value=freq; o.connect(g); g.connect(a.destination);
+  const t=a.currentTime; g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol,t+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.start(t); o.stop(t+dur+0.02);
+}
+const countdownBeep=()=>beep(880,0.15,'square',0.4);   // 5-4-3-2-1
+const goTone=()=>{beep(1320,0.5,'sawtooth',0.5);};       // start work
+const restTone=()=>beep(523,0.35,'sine',0.4);            // start rest
+const finishTone=()=>{beep(784,0.2);setTimeout(()=>beep(988,0.2),200);setTimeout(()=>beep(1318,0.5),400);};
+function vibrate(p){ if(document.getElementById('vib').checked && navigator.vibrate) navigator.vibrate(p); }
+
+// ----- Phase schedule -----
+let phases=[],idx=0,remMs=0,running=false,raf=null,lastWhole=-1,lastTs=0;
+function build(){
+  const totalSec=cfg.total.v*60, work=cfg.work.v, rest=cfg.rest.v;
+  const cycle=work+rest, rounds=cycle>0?Math.max(1,Math.ceil(totalSec/cycle)):1;
+  const list=[];
+  if(cfg.prep.v>0) list.push({type:'GET_READY',dur:cfg.prep.v,r:0,R:rounds});
+  let spent=0;
+  for(let r=1;r<=rounds;r++){
+    if(spent>=totalSec)break;
+    const w=Math.min(work,totalSec-spent);
+    if(w>0){list.push({type:'WORK',dur:w,r,R:rounds});spent+=w;}
+    if(spent>=totalSec)break;
+    if(rest>0){const rr=Math.min(rest,totalSec-spent);if(rr>0){list.push({type:'REST',dur:rr,r,R:rounds});spent+=rr;}}
+  }
+  list.push({type:'DONE',dur:0,r:rounds,R:rounds});
+  phases=list;
+}
+function load(i,announce){
+  idx=i; const p=phases[i]; remMs=p.dur*1000; lastWhole=p.dur; render();
+  if(announce){
+    if(p.type==='WORK'){goTone();vibrate([120]);}
+    else if(p.type==='REST'){restTone();vibrate([80]);}
+    else if(p.type==='DONE'){finishTone();vibrate([200,100,200]);}
+  }
+}
+function totalLeft(){ let ms=Math.max(0,remMs); for(let j=idx+1;j<phases.length;j++) ms+=phases[j].dur*1000; return ms/1000; }
+function render(){
+  const p=phases[idx];
+  document.getElementById('time').textContent=fmt(p.type==='DONE'?0:remMs/1000);
+  const labels={GET_READY:'GET READY',WORK:'WORK',REST:'REST',DONE:'DONE 🎉'};
+  const ph=document.getElementById('phase'); ph.textContent=labels[p.type];
+  const col=cssv(COLORS[p.type]); ph.style.color=col;
+  document.getElementById('time').style.color = p.type==='GET_READY'?cssv('--text'):col;
+  document.getElementById('round').textContent = p.type==='GET_READY'?'Starting soon…':`Round ${p.r} / ${p.R}`;
+  document.getElementById('total').textContent='Total left  '+fmt(totalLeft());
+}
+function tick(ts){
+  if(!running)return;
+  if(!lastTs)lastTs=ts;
+  remMs-=(ts-lastTs); lastTs=ts;
+  const whole=Math.max(0,Math.ceil(remMs/1000));
+  if(whole!==lastWhole){
+    lastWhole=whole; const p=phases[idx];
+    if(p.type!=='DONE' && whole>=1 && whole<=cfg.beep.v) countdownBeep();
+    render();
+  }
+  if(remMs<=0){
+    const n=idx+1;
+    if(n<phases.length){ load(n,true); if(phases[n].type==='DONE'){finish();return;} }
+    else {finish();return;}
+  }
+  raf=requestAnimationFrame(tick);
+}
+function start(){ audio(); running=true; lastTs=0; document.getElementById('startPause').textContent='PAUSE'; setSettings(false); raf=requestAnimationFrame(tick); }
+function pause(){ running=false; cancelAnimationFrame(raf); document.getElementById('startPause').textContent='RESUME'; }
+function reset(){ running=false; cancelAnimationFrame(raf); build(); load(0,false); document.getElementById('startPause').textContent='START'; setSettings(true); }
+function finish(){ running=false; cancelAnimationFrame(raf); idx=phases.length-1; render(); document.getElementById('startPause').textContent='RESTART'; setSettings(true); }
+function setSettings(en){ document.querySelectorAll('.step').forEach(b=>{b.disabled=!en;b.style.opacity=en?1:.4;}); }
+
+document.getElementById('startPause').onclick=()=>{
+  if(phases[idx].type==='DONE'){reset();return;}
+  running?pause():start();
+};
+document.getElementById('reset').onclick=reset;
+
+// settings steppers
+document.querySelectorAll('.row').forEach(row=>{
+  const k=row.dataset.k, val=row.querySelector('.val');
+  val.textContent=cfg[k].v;
+  row.querySelectorAll('.step').forEach(btn=>btn.onclick=()=>{
+    if(running)return;
+    const c=cfg[k]; c.v=Math.min(c.max,Math.max(c.min,c.v+parseInt(btn.dataset.d)*c.step));
+    val.textContent=c.v; build(); load(0,false); render();
+  });
+});
+
+build(); load(0,false); render();
+</script>
+</body>
+</html>
